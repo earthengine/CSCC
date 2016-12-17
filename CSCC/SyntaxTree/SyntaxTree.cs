@@ -1,12 +1,13 @@
 ﻿using CSCC.Parser;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 
 namespace CSCC.SyntaxTree
 {
     public class Atom
     {
-        private string name;
+        private readonly string name;
 
         private Atom(string v)
         {
@@ -15,6 +16,19 @@ namespace CSCC.SyntaxTree
 
         public string Name { get { return name; } }
 
+        public override bool Equals(object obj)
+        {
+            return (obj as Atom)?.name == name;
+        }
+        public override int GetHashCode()
+        {
+            return name.GetHashCode();
+        }
+        public override string ToString()
+        {
+            return name;
+        }
+
         public static PushParser<char,Atom> PParser
         {
             get
@@ -22,44 +36,42 @@ namespace CSCC.SyntaxTree
                 return (from s in PushParsers.Char(c => !new[] { '.', '(', ')' }.Contains(c)).Some()
                         select string.Concat(s).Trim())
                        .Or(from _1 in PushParsers.Char('"')
-                           from v in PushParsers.Char(c => c != '"').Many()
+                           from v in PushParsers.Char(c => c != '"' && c !='\\')
+                                     .Or(from _3 in PushParsers.Char('\\')
+                                         from c in PushParsers.Char('"')
+                                         select c).Many()
                            from _2 in PushParsers.Char('"')
                            select string.Concat(v))
-                       .Or(from _1 in PushParsers.Char('\'')
-                           from v in PushParsers.Char(c => c != '\'').Many()
-                           from _2 in PushParsers.Char('\'')
-                           select string.Concat(v))
                         .Many()
-                        .Select(x => new Atom(string.Concat(x)));
+                        .Select(x => new Atom(string.Concat(x)))
+                        .Distinct();
             }
         }
-        
-        public static List<Result<StringPos, Atom>> Parse(StringPos input){
-            return (from s in Parsers.Char(c => !new[] { '.', '(', ')', '"', '\'' }.Contains(c)).Some()
-                    select string.Concat(s).Trim())
-                    .OR(from _1 in Parsers.Char('"')
-                        from v in Parsers.Char(c => c!='"').Many()
-                        from _2 in Parsers.Char('"')
-                        select string.Concat(v))
-                    .OR(from _1 in Parsers.Char('\'')
-                        from v in Parsers.Char(c => c!='\'').Many()
-                        from _2 in Parsers.Char('\'')
-                        select string.Concat(v))
-                    .Many()
-                    .Select(x => new Atom(string.Concat(x)))(input);
-        }
-        public static Parser<StringPos, Atom> TheParser = Parse;
     }
 
     public class SimpleTerm
     {
-        private Atom head;
-        private List<Atom> args;
+        private readonly Atom head;
+        private readonly List<Atom> args;
 
         public SimpleTerm(Atom h, IEnumerable<Atom> args)
         {
             this.head = h;
             this.args = args.ToList();
+        }
+        public override bool Equals(object obj)
+        {
+            var st = obj as SimpleTerm;
+            return st != null && st.head == head &&
+                Enumerable.SequenceEqual(st.args, args);
+        }
+        public override int GetHashCode()
+        {
+            return new { head, args }.GetHashCode();
+        }
+        public override string ToString()
+        {
+            return string.Join(".", new[] { head.ToString() }.Concat(args.Select(a => a.ToString())).ToArray(), 0, args.Count + 1);
         }
 
         public Atom Head { get { return head; } }
@@ -69,16 +81,9 @@ namespace CSCC.SyntaxTree
         {
             get {
                 return (from r in Atom.PParser.SepBy1(PushParsers.Char('.'))
-                        select new SimpleTerm(r.First(), r.Skip(1)));
+                        select new SimpleTerm(r.First(), r.Skip(1))).Distinct();
             }
         }
-
-        public static List<Result<StringPos, SimpleTerm>> Parse(StringPos input)
-        {
-            return (from r in Atom.TheParser.SepBy1(Parsers.Char('.'))                    
-                    select new SimpleTerm(r.First(), r.Skip(1)))(input);
-        }
-        public static Parser<StringPos, SimpleTerm> TheParser = Parse;
     }
 
     public class RuleTerm
@@ -104,34 +109,47 @@ namespace CSCC.SyntaxTree
             flatPart = new SimpleTerm(head, args);
             this.inBrackets = inbs;
         }
+        public override bool Equals(object obj)
+        {
+            var rt = obj as RuleTerm;
+            return rt != null && rt.flatPart == flatPart &&
+                Enumerable.SequenceEqual(rt.inBrackets, inBrackets);
+        }
+        public override int GetHashCode()
+        {
+            return new { flatPart, InBrackets }.GetHashCode();
+        }
+        public override string ToString()
+        {
+            var ap = new StringBuilder();
+            ap.Append(flatPart);
+            foreach(var inb in inBrackets)
+            {
+                ap.Append(".(");
+                ap.Append(inb.ToString());
+                ap.Append(")");
+            }
+            return ap.ToString();
+        }
 
         public static PushParser<char, RuleTerm> PParser
         {
             get
             {
-                return from flat in SimpleTerm.PParser
+                return (from flat in SimpleTerm.PParser
                        from inBrackets in (
                                            from _1 in PushParsers.Char('.')
-                                           from _2 in PushParsers.Char('(')
-                                           from inBracket in SimpleTerm.PParser
-                                           from _3 in PushParsers.Char(')')
+                                           from inBracket in (from _2 in PushParsers.Char('(')
+                                                    from inBracket1 in SimpleTerm.PParser
+                                                    from _3 in PushParsers.Char(')')
+                                                    select inBracket1).Or(
+                                                    from atom in Atom.PParser
+                                                    select new SimpleTerm(atom,Enumerable.Empty<Atom>())
+                                                    )
                                            select inBracket).Many()
-                       select new RuleTerm(flat, inBrackets);
+                       select new RuleTerm(flat, inBrackets)).Distinct();
             }
         }
-
-        public static List<Result<StringPos, RuleTerm>> Parse(StringPos input)
-        {
-            return (from flat in SimpleTerm.TheParser
-                    from inBrackets in (
-                                       from _1 in Parsers.Char('.')
-                                       from _2 in Parsers.Char('(')
-                                       from inBracket in SimpleTerm.TheParser
-                                       from _3 in Parsers.Char(')')
-                                       select inBracket).Many()
-                    select new RuleTerm(flat, inBrackets))(input);
-        }
-        public static Parser<StringPos, RuleTerm> TheParser = Parse;
     }
 
     public class Rule
@@ -144,29 +162,31 @@ namespace CSCC.SyntaxTree
             this.declare = st;
             this.body = rt;
         }
+        public override bool Equals(object obj)
+        {
+            var r = obj as Rule;
+            return r != null && r.declare == declare && r.body == body;
+        }
+        public override int GetHashCode()
+        {
+            return new { declare, body }.GetHashCode();
+        }
+        public override string ToString()
+        {
+            return declare.ToString() + "->" + body.ToString();
+        }
 
         public static PushParser<char, Rule> PParser
         {
             get
             {
-                return from st in SimpleTerm.PParser
+                return (from st in SimpleTerm.PParser
                        from _1 in (from _2 in PushParsers.Char('-')
                                    from _3 in PushParsers.Char('>')
                                    select 0)
                        from rt in RuleTerm.PParser
-                       select new Rule(st, rt);
+                       select new Rule(st, rt)).Distinct();
             }
         }
-
-        public static List<Result<StringPos, Rule>> Parse(StringPos input)
-        {
-            return (from st in SimpleTerm.TheParser
-                    from _1 in (from _2 in Parsers.Char('-')
-                                from _3 in Parsers.Char('>')
-                                select 0)
-                    from rt in RuleTerm.TheParser
-                    select new Rule(st, rt))(input);
-        }
-        public static Parser<StringPos, Rule> TheParser = Parse;
     }
 }

@@ -17,9 +17,6 @@ namespace CSCCTests
         [Test]
         public void TestMethod1()
         {
-            var rt = PushParsers.Parse(Rule.PParser, "AddCBV.x.y.r  -> x.(r.y).(AddCBV'.y.r)").ToList();
-            
-
             var rules = new List<Rule>();
 
             rules.Add(ParseRule("Zero.z.s -> z"));

@@ -33,6 +33,13 @@ namespace CSCC.Parser
         {
             return () => Tuple.Create<IEnumerable<R>, Func<T, PushParser<T, R>>>(Enumerable.Empty<R>(), null);
         }
+        public static PushParser<T, V> Where<T, V>(this PushParser<T, V> parser, Func<V, bool> pred)
+        {
+            var tr = parser();
+            var result = tr.Item1.Where(pred);
+            Func<T,PushParser<T,V>> f = t => tr.Item2(t).Where(pred);
+            return () => Tuple.Create(result, f);
+        }
         public static PushParser<T,R> Or<T, R>(this PushParser<T,R> parser1, PushParser<T, R> parser2)
         {
             var p1 = parser1();
@@ -94,6 +101,13 @@ namespace CSCC.Parser
         public static PushParser<T,T> Item<T>()
         {
             return () => Tuple.Create<IEnumerable<T>,Func<T,PushParser<T,T>>>(Enumerable.Empty<T>(), t => Of<T,T>(t));
+        }
+        public static PushParser<T,R> Distinct<T, R>(this PushParser<T,R> parser)
+        {
+            var p = parser();
+            return () => Tuple.Create(p.Item1.Distinct(), 
+                p.Item2==null ? (Func<T, PushParser<T, R>>)null : t => p.Item2(t).Distinct());
+
         }
     }
 }
