@@ -1,4 +1,5 @@
-﻿using CSCC.Parser;
+﻿using CSCC.Compile;
+using CSCC.Parser;
 using CSCC.SyntaxTree;
 using NUnit.Framework;
 using System.Collections.Generic;
@@ -11,7 +12,7 @@ namespace CSCCTests
     {
         private Rule ParseRule(string s)
         {
-            return PushParsers.Parse(Rule.PParser, s).First();
+            return Parsers.Parse(Rule.PParser, s).First();
         }
 
         [Test]
@@ -24,7 +25,19 @@ namespace CSCCTests
 
             rules.Add(ParseRule("AddCBV.x.y.r  -> x.(r.y).(AddCBV'.y.r)"));
             rules.Add(ParseRule("AddCBV'.y.r.x' -> AddCBV.x'.(S.y).r"));
+        }
 
+        [Test]
+        public void TestCCType()
+        {
+            var boolType = CCTypes.Continuation(CCTypes.Continuation(), CCTypes.Continuation());
+            var NatType = CCTypes.Redefine("Nat", CCTypes.Continuation(), CCTypes.Continuation(CCTypes.Atomic("Nat")));
+            var ListType = CCTypes.Redefine("List", CCTypes.Continuation(), CCTypes.Continuation(CCTypes.Atomic("A"), CCTypes.Atomic("List")));
+            var BinTreeType = CCTypes.Redefine("BinTree", CCTypes.Continuation(), 
+                CCTypes.Continuation(CCTypes.Atomic("A"), CCTypes.Atomic("BinTree"), CCTypes.Atomic("BinTree")));
+
+            var bool1 = CCTypes.Continuation(CCTypes.Continuation(), CCTypes.Continuation());
+            Assert.That(boolType, Is.EqualTo(bool1));
         }
     }
 }

@@ -42,10 +42,10 @@
   <ItemGroup>
     <Compile Include="Class1.cs" />
     <Compile Include="Compile\CompiledTree.cs" />
-    <Compile Include="Parser\Parser.cs" />
     <Compile Include="Parser\PushParser.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="SyntaxTree\SyntaxTree.cs" />
+    <Compile Include="Utils\HashHelper.cs" />
   </ItemGroup>
   <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

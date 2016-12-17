@@ -1,4 +1,5 @@
 ﻿using CSCC.Parser;
+using CSCC.Utils;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -29,18 +30,18 @@ namespace CSCC.SyntaxTree
             return name;
         }
 
-        public static PushParser<char,Atom> PParser
+        public static Parser<char,Atom> PParser
         {
             get
             {
-                return (from s in PushParsers.Char(c => !new[] { '.', '(', ')' }.Contains(c)).Some()
+                return (from s in Parsers.Char(c => !new[] { '.', '(', ')' }.Contains(c)).Some()
                         select string.Concat(s).Trim())
-                       .Or(from _1 in PushParsers.Char('"')
-                           from v in PushParsers.Char(c => c != '"' && c !='\\')
-                                     .Or(from _3 in PushParsers.Char('\\')
-                                         from c in PushParsers.Char('"')
+                       .Or(from _1 in Parsers.Char('"')
+                           from v in Parsers.Char(c => c != '"' && c !='\\')
+                                     .Or(from _3 in Parsers.Char('\\')
+                                         from c in Parsers.Char('"')
                                          select c).Many()
-                           from _2 in PushParsers.Char('"')
+                           from _2 in Parsers.Char('"')
                            select string.Concat(v))
                         .Many()
                         .Select(x => new Atom(string.Concat(x)))
@@ -67,7 +68,9 @@ namespace CSCC.SyntaxTree
         }
         public override int GetHashCode()
         {
-            return new { head, args }.GetHashCode();
+            return HashHelper.Base
+                .HashObject(head)
+                .HashEnumerable(args);
         }
         public override string ToString()
         {
@@ -77,10 +80,10 @@ namespace CSCC.SyntaxTree
         public Atom Head { get { return head; } }
         public IEnumerable<Atom> Args { get { return args; } }
 
-        public static PushParser<char, SimpleTerm> PParser
+        public static Parser<char, SimpleTerm> PParser
         {
             get {
-                return (from r in Atom.PParser.SepBy1(PushParsers.Char('.'))
+                return (from r in Atom.PParser.SepBy1(Parsers.Char('.'))
                         select new SimpleTerm(r.First(), r.Skip(1))).Distinct();
             }
         }
@@ -88,25 +91,18 @@ namespace CSCC.SyntaxTree
 
     public class RuleTerm
     {
-        private readonly SimpleTerm flatPart;
+        private readonly Atom flatPart;
         private readonly List<SimpleTerm> inBrackets;
 
-        public SimpleTerm FlatPart { get { return flatPart; } }
+        public Atom FlatPart { get { return flatPart; } }
         public IEnumerable<SimpleTerm> InBrackets { get { return inBrackets; } }
 
-        public RuleTerm(SimpleTerm flat, IEnumerable<SimpleTerm> inBrackets)
+        public RuleTerm(Atom flat, IEnumerable<SimpleTerm> inBrackets)
         {
-            var head = flat.Head;
-            var args = flat.Args.ToList();
+            var head = flat;
             var inbs = new List<SimpleTerm>();
-            foreach(var st in inBrackets)
-            {
-                if (!st.Args.Any() && !inbs.Any())
-                    args.Add(st.Head);
-                else
-                    inbs.Add(st);
-            }
-            flatPart = new SimpleTerm(head, args);
+            inbs.AddRange(inBrackets);
+            flatPart = head;
             this.inBrackets = inbs;
         }
         public override bool Equals(object obj)
@@ -117,7 +113,9 @@ namespace CSCC.SyntaxTree
         }
         public override int GetHashCode()
         {
-            return new { flatPart, InBrackets }.GetHashCode();
+            return HashHelper.Base
+                .HashObject(flatPart)
+                .HashEnumerable(inBrackets);
         }
         public override string ToString()
         {
@@ -132,16 +130,16 @@ namespace CSCC.SyntaxTree
             return ap.ToString();
         }
 
-        public static PushParser<char, RuleTerm> PParser
+        public static Parser<char, RuleTerm> PParser
         {
             get
             {
-                return (from flat in SimpleTerm.PParser
+                return (from flat in Atom.PParser
                        from inBrackets in (
-                                           from _1 in PushParsers.Char('.')
-                                           from inBracket in (from _2 in PushParsers.Char('(')
+                                           from _1 in Parsers.Char('.')
+                                           from inBracket in (from _2 in Parsers.Char('(')
                                                     from inBracket1 in SimpleTerm.PParser
-                                                    from _3 in PushParsers.Char(')')
+                                                    from _3 in Parsers.Char(')')
                                                     select inBracket1).Or(
                                                     from atom in Atom.PParser
                                                     select new SimpleTerm(atom,Enumerable.Empty<Atom>())
@@ -169,20 +167,22 @@ namespace CSCC.SyntaxTree
         }
         public override int GetHashCode()
         {
-            return new { declare, body }.GetHashCode();
+            return HashHelper.Base
+                .HashObject(declare)
+                .HashObject(body);
         }
         public override string ToString()
         {
             return declare.ToString() + "->" + body.ToString();
         }
 
-        public static PushParser<char, Rule> PParser
+        public static Parser<char, Rule> PParser
         {
             get
             {
                 return (from st in SimpleTerm.PParser
-                       from _1 in (from _2 in PushParsers.Char('-')
-                                   from _3 in PushParsers.Char('>')
+                       from _1 in (from _2 in Parsers.Char('-')
+                                   from _3 in Parsers.Char('>')
                                    select 0)
                        from rt in RuleTerm.PParser
                        select new Rule(st, rt)).Distinct();
