@@ -91,37 +91,34 @@ namespace CSCC.SyntaxTree
 
     public class RuleTerm
     {
-        private readonly Atom flatPart;
-        private readonly List<SimpleTerm> inBrackets;
+        private readonly Atom head;
+        private readonly List<SimpleTerm> terms;
 
-        public Atom FlatPart { get { return flatPart; } }
-        public IEnumerable<SimpleTerm> InBrackets { get { return inBrackets; } }
+        public Atom Head { get { return head; } }
+        public IEnumerable<SimpleTerm> Terms { get { return terms; } }
 
-        public RuleTerm(Atom flat, IEnumerable<SimpleTerm> inBrackets)
+        public RuleTerm(Atom h, IEnumerable<SimpleTerm> t)
         {
-            var head = flat;
-            var inbs = new List<SimpleTerm>();
-            inbs.AddRange(inBrackets);
-            flatPart = head;
-            this.inBrackets = inbs;
+            this.head = h;
+            this.terms = t.ToList();
         }
         public override bool Equals(object obj)
         {
             var rt = obj as RuleTerm;
-            return rt != null && rt.flatPart == flatPart &&
-                Enumerable.SequenceEqual(rt.inBrackets, inBrackets);
+            return rt != null && rt.head == head &&
+                Enumerable.SequenceEqual(rt.terms, terms);
         }
         public override int GetHashCode()
         {
             return HashHelper.Base
-                .HashObject(flatPart)
-                .HashEnumerable(inBrackets);
+                .HashObject(head)
+                .HashEnumerable(terms);
         }
         public override string ToString()
         {
             var ap = new StringBuilder();
-            ap.Append(flatPart);
-            foreach(var inb in inBrackets)
+            ap.Append(head);
+            foreach(var inb in terms)
             {
                 ap.Append(".(");
                 ap.Append(inb.ToString());
@@ -154,6 +151,10 @@ namespace CSCC.SyntaxTree
     {
         private readonly SimpleTerm declare;
         private readonly RuleTerm body;
+
+        public string RuleName { get { return declare.Head.Name; } }
+        public IEnumerable<string> Args { get { return declare.Args.Select(a => a.Name); } }
+        public RuleTerm Body { get { return body; } }
 
         public Rule(SimpleTerm st, RuleTerm rt)
         {
